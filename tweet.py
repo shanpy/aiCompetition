@@ -1,19 +1,14 @@
 import tweepy
+import apiKey
 import csv
-
-# Variables that contains the user credentials to access Twitter API
-ACCESS_TOKEN = 
-ACCESS_SECRET = 
-CONSUMER_KEY = 
-CONSUMER_SECRET = 
 
 
 def get_all_tweets(screen_name):
     # Twitter only allows access to a users most recent 3240 tweets with this method
 
     # authorize twitter, initialize tweepy
-    auth = tweepy.OAuthHandler(CONSUMER_KEY, CONSUMER_SECRET)
-    auth.set_access_token(ACCESS_TOKEN, ACCESS_SECRET)
+    auth = tweepy.OAuthHandler(apiKey.twitter_customer, apiKey.twitter_customer_secret)
+    auth.set_access_token(apiKey.twitter_token, apiKey.twitter_secret)
     api = tweepy.API(auth)
 
     # initialize a list to hold all the tweepy Tweets
@@ -58,4 +53,4 @@ def get_all_tweets(screen_name):
 
 if __name__ == '__main__':
     # pass in the username of the account you want to download
-    get_all_tweets("SenSanders")
+    get_all_tweets("WhiteHouse")

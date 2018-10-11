@@ -6,6 +6,8 @@ import apiKey
 import textdistance
 
 
+######## Get Tweets and Clean
+
 def get_all_tweets(screen_name):
 
     # Twitter only allows access to a users most recent 3240 tweets with this method
@@ -32,8 +34,10 @@ def get_all_tweets(screen_name):
         oldest = alltweets[-1].id - 1
 
         # keep grabbing tweets until there are no tweets left to grab
+    except Exception as e:
+        return [[0,"Error in initialize new tweets from @"+screen_name+":"+str(e),False]]
 
-
+    try:
         while len(new_tweets) > 0:
             # all subsiquent requests use the max_id param to prevent duplicates
             new_tweets = api.user_timeline(screen_name=screen_name, count=200, max_id=oldest)
@@ -41,17 +45,17 @@ def get_all_tweets(screen_name):
             alltweets.extend(new_tweets)
             # update the id of the oldest tweet less one
             oldest = alltweets[-1].id - 1
+    except Exception as e:
+        return [[0,"Error in retriving timeline from @"+screen_name+":"+str(e),False]]
 
+    try:
         # transform the tweepy tweets into a 2D array that will populate the csv
         outtweets = []
         for tweet in alltweets:
-            tweet_content = clean_text(tweet.text.encode("utf-8")).strip()
+            tweet_content = clean_text(tweet.text).strip()
             if tweet_content and (not tweet_content.isspace()):
                 outtweet = [tweet.id_str, tweet.created_at, tweet_content]
                 outtweets.append(outtweet)
-
-        # end
-        print("Finish reading posts from @" + screen_name + " ,created at " + time.strftime('%Y-%m-%d %H:%M:%S', time.strptime(tweet['created_at'],'%a %b %d %H:%M:%S +0000 %Y')))
 
         # write the csv
         with open('%s_tweets.csv' % screen_name, 'w') as f:
@@ -60,22 +64,8 @@ def get_all_tweets(screen_name):
             writer.writerows(outtweets)
         pass      
         return outtweets
-    except:
-        return [[0,"False",False]]
-
-
-def hammingCompare(outtweets, innerTwitter):
-    least_hamming = 100000000000
-    least_hamming_tweet = ""
-    for outtweet in outtweets:
-        hamming_dis = textdistance.hamming.distance(outtweet[2], innerTwitter[2])
-        # ask hamming distance <10
-        if hamming_dis < least_hamming < 10:
-            least_hamming = hamming_dis
-            least_hamming_tweet = outtweet[2]
-            return [True, [least_hamming, least_hamming_tweet]]
-        else:
-            return [False, 0]
+    except Exception as e:
+        return [[0,"Error in packing new tweets from @"+screen_name+":"+str(e),False]]
 
 
 def clean_text(twitter_text):
@@ -84,18 +74,57 @@ def clean_text(twitter_text):
     no_at = no_b.replace('@'+compareName.firstAccount+':', '').replace('@'+compareName.secondAccount+':', '')
     return no_at
 
+
+
+
+
+######### Semantic Similarity Check
+
+def compare(outtweets, innerTwitter):
+    for outtweet in outtweets:
+        hamming_result = hammingCompare(outtweet, innerTwitter)
+        fingeprint_result = rake_client(outtweet, innerTwitter)["fingerprint"]
+        if (hamming_result[0]) or (fingeprint_result>=1):
+            return {"tweet content": outtweet, "hamming":hamming_result, "fingerprint": fingeprint_result}
+        else:
+            return False
+
+# simHash & Hamming Distance
+def hammingCompare(outtweet, innerTwitter):
+    least_hamming = 10000000
+    least_hamming_tweet = ""
+    hamming_dis = textdistance.hamming.distance(outtweet[2], innerTwitter[2])
+    # ask hamming distance <1000
+    if hamming_dis < least_hamming < 1000:
+        least_hamming = hamming_dis
+        least_hamming_tweet = outtweet[2]
+        return [True, [least_hamming, least_hamming_tweet]]
+    else:
+        return [False, least_hamming]
+
+
+def rake_client(outtweet, innerTwitter):
+    client = retinasdk.FullClient(apiKey.retina_token, apiServer="http://api.cortical.io/rest", retinaName="en_associative")
+    first_fingerprint = client.getFingerprintForText(outtweet)
+    print(first_fingerprint)
+    second_fingerprint = client.getFingerprintForText(innerTwitter)
+    fingerprint_res = client.compare(first_fingerprint,second_fingerprint )
+    # keywords_outtweet = liteClient.getKeyword(outtweet)
+    return {"fingerprint": fingerprint_res}
+
+
 if __name__ == '__main__':
     # pass in the username of the account you want to download
     second_acct = get_all_tweets(compareName.secondAccount)
     first_acct = get_all_tweets(compareName.firstAccount)
-    print(str(second_acct[0][2]) + " " + str(first_acct[0][2]))
-    if second_acct[0][2] and first_acct[0][2]: 
+    if (not type(second_acct[0][2]) is bool) and (not type(first_acct[0][2]) is bool): 
         for sa in second_acct:
-                hammingResult = hammingCompare(first_acct, sa)
-                if hammingResult[0]:
-                    hamming_d = hammingResult[1][0]
-                    print(str(hamming_d) + " prove: " + hammingResult[1][1] + " is similar to " + sa[2])
-                else:
-                    print("error occured when checking similarity of posts. Please try again")
+                result = compare(first_acct, sa)
+                if isinstance(result, dict):
+                    print("@" + compareName.secondAccount+": " + sa + " has similar tweet from @"+compareName.firstAccount)
+                    for method,res in result.items():
+                        print(str(method)+": " + str(res))
+                    # else:
+                    # print("Hamming distance too large: " + str(hammingResult[1]))
     else:
-        print("error occured when retriving posts. Please try again")
+        print(str(second_acct[0][1]) + " " + str(first_acct[0][1]))
