@@ -1,0 +1,2 @@
+firstAccount = "realDonaldTrump"
+secondAccount = "WhiteHouse"
